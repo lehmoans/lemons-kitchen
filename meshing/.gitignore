@@ -1,0 +1,5 @@
+venv
+.vscode
+!.vscode/launch.json
+
+*.ipynb

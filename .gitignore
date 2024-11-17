@@ -1,0 +1,6 @@
+.vscode/*
+!.vscode/launch.json
+venv
+.gitattributes
+
+openfoam
