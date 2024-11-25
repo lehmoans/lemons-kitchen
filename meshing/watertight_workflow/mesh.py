@@ -11,7 +11,7 @@ import psutil
 from inputs import *
 
 #updates
-from meshing.updates import send_update
+from updates import send_update
 
 class Mesh:
 
@@ -19,7 +19,8 @@ class Mesh:
         self.save_dir  = SAVE_DIR
         self.scdoc_file_path= GEOM_FILE_PATH
         self.file_name_noext = os.path.basename(self.scdoc_file_path)
-        self.dir_name = os.cwd(self.scdoc_file_path)
+        head, tail = os.path.split(self.scdoc_file_path)
+        self.dir_name = head
         self.save_path = Path(self.save_dir)
         self.processors = self.get_cores()
 
@@ -32,7 +33,7 @@ class Mesh:
         set_config(blocking=True, set_view_on_display="isometric")
 
         #fluent setup
-        self.session = pyfluent.launch_fluent(mode="meshing",processor_count=self.processors, cleanup_on_exit=True)
+        self.session = pyfluent.launch_fluent(mode="meshing",processor_count=self.processors, cleanup_on_exit=True,)
         print(self.session.get_fluent_version())
 
     def start_workflow(self):
@@ -186,4 +187,10 @@ class Mesh:
         else:
             send_update("meshing","meshing successful")            
 
+
+if __name__ =="__main__":
+    os.environ["PYFLUENT_FLUENT_ROOT"] = '/mnt/d/Ansys_2023R1/Ansys_2023R1/'
+    myMesh=Mesh()
+    myMesh.run_meshing()
     
+
