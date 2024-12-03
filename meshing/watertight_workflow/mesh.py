@@ -11,11 +11,14 @@ import psutil
 from inputs import *
 
 #updates
-from updates import send_update
+from updates import Updates
+
+#admin privilege
+import pyuac
 
 class Mesh:
 
-    def __init__(self):
+    def __init__(self,verbose=False):
         self.save_dir  = SAVE_DIR
         self.scdoc_file_path= GEOM_FILE_PATH
         self.file_name_noext = os.path.basename(self.scdoc_file_path)
@@ -23,6 +26,13 @@ class Mesh:
         self.dir_name = head
         self.save_path = Path(self.save_dir)
         self.processors = self.get_cores()
+        self.verbose =verbose
+        self.updates = Updates(self.verbose)
+
+
+    def __exit__(self):
+        if self.session:
+            self.session.exit()
 
     @staticmethod
     def get_cores():
@@ -30,69 +40,49 @@ class Mesh:
 
         
     def initialise(self):
-        set_config(blocking=True, set_view_on_display="isometric")
-
         #fluent setup
-        self.session = pyfluent.launch_fluent(mode="meshing",processor_count=self.processors, cleanup_on_exit=True,)
-        print(self.session.get_fluent_version())
+        self.session = pyfluent.launch_fluent(mode="meshing",processor_count=self.processors, precision="double", show_gui = True)
+        print("fluent meshing initiated")
 
     def start_workflow(self):
 
         # Meshing Workflow
-        self.workflow = self.session.workflow
-        self.geometry_filename = examples.download_file(
-            self.scdoc_file_path,
-            self.dir_name,
-            save_path=self.save_dir,
-        )
+        self.workflow =  self.session.workflow
         self.workflow.InitializeWorkflow(WorkflowType="Watertight Geometry")
-        self.workflow.TaskObject["Import Geometry"].Arguments = dict(FileName=self.geometry_filename)
+
+
+        self.workflow.TaskObject['Import Geometry'].Arguments = {
+            'FileFormat': 'CAD', #[CAD, Mesh]
+            'ImportType': 'Single File', # ['Single File', 'Multiple Files']
+            'LengthUnit': 'mm', # ['mm', 'm', 'cm', 'in', 'ft', 'um', 'nm'] 
+            'UseBodyLabels': 'No', # ['No', 'Yes']
+            'FileName': self.scdoc_file_path
+        }
+
         self.workflow.TaskObject["Import Geometry"].Execute()
 
     def add_local_sizings(self):
         # Add Local Face Sizing
         
         self.add_local_sizing = self.workflow.TaskObject["Add Local Sizing"]
-        self.add_local_sizing.Arguments = dict(
-            {
-                "AddChild": "yes",
-                "BOIControlName": "facesize_front",
-                "BOIFaceLabelList": ["wall_ahmed_body_front"],
-                "BOIGrowthRate": 1.15,
-                "BOISize": 8,
-            }
-    )
-        self.add_local_sizing.Execute()
 
-        self.add_local_sizing.InsertCompoundChildTask()
-        self.workflow.TaskObject["Add Local Sizing"].Execute()
-        self.add_local_sizing =self.workflow.TaskObject["Add Local Sizing"]
-        self.add_local_sizing.Arguments = dict(
-            {
-                "AddChild": "yes",
-                "BOIControlName": "facesize_rear",
-                "BOIFaceLabelList": ["wall_ahmed_body_rear"],
-                "BOIGrowthRate": 1.15,
-                "BOISize": 5,
-            }
-        )
-        self.add_local_sizing.Execute()
+        for facesize in FACESIZES:
+            self.add_local_sizing.Arguments = dict(
+                {
+                    "AddChild": "yes",
+                    "SizeControlType": "FaceSize",
+                    "Name": facesize["Name"],
+                    "GrowthRate": facesize["GrowthRate"],
+                    "TargetMeshSize":facesize["TargetMeshSize"], #mm
+                    "FaceLabelList": facesize["BOIFaceLabelList"],
+                }
+             )
+            self.add_local_sizing.Execute()
 
-        self.add_local_sizing.InsertCompoundChildTask()
-        self.workflow.TaskObject["Add Local Sizing"].Execute()
-        self.add_local_sizing = self.workflow.TaskObject["Add Local Sizing"]
-        self.add_local_sizing.Arguments = dict(
-            {
-                "AddChild": "yes",
-                "BOIControlName": "facesize_main",
-                "BOIFaceLabelList": ["wall_ahmed_body_main"],
-                "BOIGrowthRate": 1.15,
-                "BOISize": 12,
-            }
-        )
-        self.add_local_sizing.Execute()
 
-        # Add BOI (Body of Influence) Sizing
+    def add_BOI(self):
+        # Add BOI (Body of Influence) Sizing 
+        #dummy function, not needed for MHH sims
         add_boi_sizing = self.workflow.TaskObject["Add Local Sizing"]
         add_boi_sizing.InsertCompoundChildTask()
         add_boi_sizing.Arguments = dict(
@@ -105,8 +95,6 @@ class Mesh:
             }
         )
         add_boi_sizing.Execute()
-        add_boi_sizing.InsertCompoundChildTask()
-
 
     def create_surface_mesh(self):
         # Add Surface Mesh Sizing
@@ -115,28 +103,33 @@ class Mesh:
         self.generate_surface_mesh.Arguments = dict(
             {
                 "CFDSurfaceMeshControls": {
-                    "CurvatureNormalAngle": 12,
-                    "GrowthRate": 1.15,
-                    "MaxSize": 50,
-                    "MinSize": 1,
-                    "SizeFunctions": "Curvature",
+                    "CurvatureNormalAngle": SURFACE_MESH_PARAMS["CurvatureNormalAngle"], 
+                    "GrowthRate": SURFACE_MESH_PARAMS["GrowthRate"],
+                    "MaxSize": SURFACE_MESH_PARAMS["MaxSize"],
+                    "MinSize": SURFACE_MESH_PARAMS[ "MinSize"],
+                    "SizeFunctions": SURFACE_MESH_PARAMS["SizeFunctions"],
                 }
             }
         )
-
         self.generate_surface_mesh.Execute()
+
+        #surface mesh improvement
         self.generate_surface_mesh.InsertNextTask(CommandName="ImproveSurfaceMesh")
         self.improve_surface_mesh = self.workflow.TaskObject["Improve Surface Mesh"]
-        self.improve_surface_mesh.Arguments.update_dict({"FaceQualityLimit": 0.4})
+        self.improve_surface_mesh.Arguments.update_dict({"FaceQualityLimit": MESH_FACE_QUALITY_LIMIT})
         self.improve_surface_mesh.Execute()
 
    
     def describe_geom(self):
             self.workflow.TaskObject["Describe Geometry"].Arguments = dict(
-                CappingRequired="Yes",
+                CappingRequired="No",
                 SetupType="The geometry consists of only fluid regions with no voids",
+                ShareTopolgy="Yes"
             )
             self.workflow.TaskObject["Describe Geometry"].Execute()
+            self.workflow.TaskObject["Create Regions"].Execute()
+            
+
             self.workflow.TaskObject["Update Boundaries"].Execute()
             self.workflow.TaskObject["Update Regions"].Execute()
 
@@ -183,14 +176,21 @@ class Mesh:
             self.save_mesh()
             self.session.exit()
         except:
-            send_update("meshing","meshing error")
+            self.updates.send_update("meshing","meshing error")
         else:
-            send_update("meshing","meshing successful")            
+             self.updates.send_update("meshing","meshing successful")            
 
 
 if __name__ =="__main__":
-    os.environ["PYFLUENT_FLUENT_ROOT"] = '/mnt/d/Ansys_2023R1/Ansys_2023R1/'
+
+    #root_path= "D://ANSYS_V241/'Ansys Inc'/v241"#"Path(r"D://ANSYS_V241/'Ansys Inc'/v241")
+    #set the "ANSYS_FLUENT_PATH" environment variable in computer, might have to set it to .profile in uni computer:  echo 'export "ANSYS_FLUENT_PATH"="D://ANSYS_V241/'Ansys Inc'/v241"' >>~/.profile
+    #or set the inputs for pyfluent(fluent_path = "")
+
+    #os.environ["ANSYS_FLUENT_PATH"] = "D://ANSYS_V241/'Ansys Inc'/v241/fluent"
     myMesh=Mesh()
     myMesh.run_meshing()
+
     
+            
 

@@ -2,5 +2,9 @@
 !.vscode/launch.json
 venv
 .gitattributes
-
+*.trn
+*.bat
+*.log
 openfoam
+FM_DESKTOP*
+__pycache__
