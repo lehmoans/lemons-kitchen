@@ -1,9 +1,5 @@
 from pathlib import Path
-
 import ansys.fluent.core as pyfluent
-from ansys.fluent.core import examples
-from ansys.fluent.visualization import set_config
-import ansys.fluent.visualization.pyvista as pv
 import os
 import psutil
 
@@ -66,7 +62,8 @@ class Mesh:
         
         self.add_local_sizing = self.workflow.TaskObject["Add Local Sizing"]
 
-        for facesize in FACESIZES:
+        for i in range(len(FACESIZES)):
+            facesize = FACESIZES[i]
             self.add_local_sizing.Arguments = dict(
                 {
                     "AddChild": "yes",
