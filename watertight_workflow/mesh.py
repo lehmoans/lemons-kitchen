@@ -76,7 +76,7 @@ class Mesh:
             mode="meshing",
             precision=pyfluent.Precision.DOUBLE,
             processor_count=self.processors,
-            cleanup_on_exit=False,
+            cleanup_on_exit=True,
             ui_mode="gui" if self.show_gui else None,
             py=True
     )   
@@ -159,9 +159,10 @@ class Mesh:
 
             self.describe_geom.setup_type = "The geometry consists of only fluid regions with no voids"
             self.describe_geom.capping_required = "No"
-            self.describe_geom.wall_to_internal.default_value()
-            self.describe_geom.invoke_share_topology = "Yes"
-            self.describe_geom.multizone.default_value()
+            self.describe_geom.wall_to_internal = "Yes"
+            self.describe_geom.invoke_share_topology = "No"
+            self.describe_geom.multizone = "No"
+
             self.describe_geom()
             
             
@@ -186,10 +187,49 @@ class Mesh:
         self.share_topology()
 
 
-    def update_regions(self):
+    def update_boundaries_and_regions(self):
+            #update boundaries
+            """
+            allowed boundary types: 
+                velocity-inlet, pressure-outlet, pressure-inlet, pressure-far-field, mass-flow-inlet, mass-flow-outlet, 
+                outflow, symmetry, wall, internal, interface, overset, outlet-vent, intake-fan, inlet-vent, exhaust-fan, 
+                porous-jump, fan, radiator, multiple-types
+            """
+            self.update_boundaries = self.workflow.update_boundaries
+
+            self.update_boundaries()
+            self.update_boundaries.revert()
+
+            boundaries_args = self.update_boundaries.arguments()
+
+            boundary_list = self.update_boundaries.boundary_current_list()
+            boundary_types = self.update_boundaries.boundary_current_type_list()
+
+            new_boundary_types = boundary_types
+
+            for i, (name, _) in enumerate(zip(boundary_list, boundary_types)):
+                if name == "inlet":
+                    new_boundary_types[i] ='pressure-inlet'
+                else if name == 'outlet':
+                    new_boundary_types[i] ='mass-flow-outlet'
+            
+            boundary_list = [i for i in boundary_list]
+            boundary_types = [i for i in boundary_types]
+            new_boundary_types = [i for i in new_boundary_list]
+
+            self.update_boundaries.
+
+
+
+            """
+            _datamodel.UpdateRegions()
+            """
+
         self.update_regions = self.workflow.update_regions
         self.update_regions()
-        self.update_regions.revert()
+
+        self.update_regions.region_current_list.default_value()
+        self.update_regions.region_current_type_list.default_value()
 
         region_list = self.update_regions.region_current_list()
         region_types = self.update_regions.region_current_type_list()
@@ -197,17 +237,7 @@ class Mesh:
         #iterate through and weed out non-fluid regions. should only be two fluid regions 
         
     def update_boundaries(self):
-            self.update_boundaries = self.workflow.update_boundaries
-
-            self.update_boundaries()
-            self.update_boundaries.revert()
-
-            boundary_list = self.update_boundaries.boundary_current_list()
-            boundary_type = self.update_boundaries.boundary_current_type_list()
-            """
-            _datamodel.UpdateRegions()
-            """
-
+           
     def add_BL(self):
         # Add Boundary Layers
     
@@ -245,8 +275,9 @@ class Mesh:
         self.add_local_sizings()
         self.create_surface_mesh()
         self.describe_geom()
-        self.invoke_share_topology()
-        self.create_and_update_regions()
+        #self.invoke_share_topology()
+        self.update_regions()
+        self.update_boundaries()
         self.add_BL()
         self.generate_volume_mesh()
         self.save_mesh()
