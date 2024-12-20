@@ -1,1 +1,10 @@
-git clone https://oath2:ghp0_XjLkUMCFyW0N1CeSsw4eTGUXjCWEYU0O5ka8@github.com/lehmoans/lemons-kitchen.git
+Current work on scripting the CFD process using Ansys Fluent
+CFD of blood behaviour in an Artifical Heart using the Moving Rotor Method
+
+Meshing
+Uses geometry (.scodc) files. 
+- see inputs.py for the params needed to create the mesh
+
+Solution
+will use SST- kw method
+
