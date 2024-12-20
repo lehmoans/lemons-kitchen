@@ -10,7 +10,7 @@ from inputs import *
 from updates import Updates
 
 #misc
-from misc import cleanup_fluent,_delete_exiting_threads
+from misc import *
 import uuid
 
 """
@@ -28,7 +28,7 @@ class Mesh:
         head, tail = os.path.split(self.scdoc_file_path)
         self.dir_name = head
         self.save_path = Path(self.save_dir)
-        self.processors = self.get_cores()
+        self.processors = self.get_cores() 
         self.verbose =verbose
         self.updates = Updates(self.verbose)
         self.show_gui = show_gui
@@ -72,26 +72,25 @@ class Mesh:
         
     def initialise(self):
         #fluent setup
-        self.session = pyfluent.launch_fluent(mode="meshing",processor_count=self.processors, precision="double", show_gui = self.show_gui)
-        print("fluent meshing initiated")
-
-        
-        # Meshing Workflow
-        self.workflow =  self.session.workflow
-        self.workflow.InitializeWorkflow(WorkflowType="Watertight Geometry")
+        self.session= pyfluent.launch_fluent(
+            mode="meshing",
+            precision=pyfluent.Precision.DOUBLE,
+            processor_count=self.processors,
+            cleanup_on_exit=False,
+            ui_mode="gui" if self.show_gui else None,
+            py=True
+    )   
+        self.workflow = self.session.watertight()
         print("workflow initiated")
 
     def import_geom(self):
+        self.import_geom = self.workflow.import_geometry
 
-        self.workflow.TaskObject['Import Geometry'].Arguments = {
-            'FileFormat': 'CAD', #[CAD, Mesh]
-            'ImportType': 'Single File', # ['Single File', 'Multiple Files']
-            'LengthUnit': 'mm', # ['mm', 'm', 'cm', 'in', 'ft', 'um', 'nm'] 
-            'UseBodyLabels': 'No', # ['No', 'Yes']
-            'FileName': self.scdoc_file_path
-        }
-
-        self.workflow.TaskObject["Import Geometry"].Execute()
+        #params
+        self.import_geom.file_name.set_state(GEOM_FILE_PATH) #scdocs only work for Windows machines
+        #self.import_geom.file_format.set_state("CAD")
+        self.import_geom.length_unit.set_state('mm')
+        self.import_geom()
 
     def add_local_sizings(self):
         # Add Local Face Sizing
@@ -103,24 +102,25 @@ class Mesh:
         self._add_local_sizing.Arguments.help()
         """
         
-        self._add_local_sizing = self.workflow.TaskObject["Add Local Sizing"]
+        self.add_local_sizing = self.workflow.add_local_sizing
 
         for i in range(len(FACESIZES)):
 
             facesize = FACESIZES[i]
             #self.append_default_values(taskObject=self._add_local_sizing,variables= facesize)
+            self.add_local_sizing.add_child = "yes"
+            self.add_local_sizing.boi_execution = 'Face Size' #wt.add_local_sizing.boi_execution.allowed_values() to get allowed values
+            self.add_local_sizing.boi_zoneor_label = 'label'
 
-            self._add_local_sizing.Arguments.set_state(
-                {
-                    "AddChild": "yes",
-                    #"BOIExecution": "Face Size",
-                    "BOIControlName": facesize["Name"],
-                    "BOIGrowthRate": facesize["GrowthRate"],
-                    #"BOISize":facesize["TargetMeshSize"], #mm
-                    "BOIFaceLabelList": facesize["FaceLabelList"],
-                }
-             )
-            self._add_local_sizing.AddChildAndUpdate()
+
+            self.add_local_sizing.boi_control_name = facesize["Name"]
+            #self.add_local_sizing.boi_growth_rate =  facesize["GrowthRate"]
+            #self.add_local_sizing.boi_size =  facesize["TargetMeshSize"]
+            self.add_local_sizing.boi_face_label_list =  facesize["FaceLabelList"]
+
+
+            self.add_local_sizing.add_child_and_update()
+
         
         print("local sizings added")
 
@@ -131,26 +131,23 @@ class Mesh:
         _datamodel.AddLocalSizingWTM()
         """
         
-        self.generate_surface_mesh = self.workflow.TaskObject["Generate the Surface Mesh"]
-        self.generate_surface_mesh.Arguments = dict(
-            {
-                "CFDSurfaceMeshControls": {
-                    "CurvatureNormalAngle": SURFACE_MESH_PARAMS["CurvatureNormalAngle"], 
-                    "GrowthRate": SURFACE_MESH_PARAMS["GrowthRate"],
-                    #"MaxSize": SURFACE_MESH_PARAMS["MaxSize"],
-                    #"MinSize": SURFACE_MESH_PARAMS[ "MinSize"],
-                    "SizeFunctions": SURFACE_MESH_PARAMS["SizeFunctions"],
-                }
-            }
-        )
-        self.generate_surface_mesh.Execute()
-    def improve_sruface_mesh(self):
+        self.generate_surface_mesh = self.workflow.create_surface_mesh
+        self.surf_mesh_controls =  self.generate_surface_mesh.cfd_surface_mesh_controls
+        #ASSIGNS DEFAULT VALUES TO THE PARAMS
+        self.surf_mesh_controls.min_size.default_value()
+        self.surf_mesh_controls.max_size.default_value()
+        self.surf_mesh_controls.growth_rate()                                                                           #check
+        self.surf_mesh_controls.size_functions.default_value()
+        self.surf_mesh_controls.curvature_normal_angle.default_value()
+        self.surf_mesh_controls.cells_per_gap.default_value()
+        self.surf_mesh_controls.scope_proximity_to.default_value()
 
-        #surface mesh improvement
-        self.generate_surface_mesh.InsertNextTask(CommandName="ImproveSurfaceMesh")
-        self.improve_surface_mesh = self.workflow.TaskObject["Improve Surface Mesh"]
-        self.improve_surface_mesh.Arguments.update_dict({"FaceQualityLimit": MESH_FACE_QUALITY_LIMIT})
-        self.improve_surface_mesh.Execute()
+        sim_params = self.surf_mesh_controls.get_state()
+
+        write_sim_params(self.create_surface_mesh, sim_params)
+
+
+        self.generate_surface_mesh()
 
    
     def describe_geom(self):
@@ -158,16 +155,18 @@ class Mesh:
             _datamodel.GeometrySetup()
             """
             
-            self.describe_geom=self.workflow.TaskObject["Describe Geometry"]
+            self.describe_geom=self.workflow.describe_geometry
 
-            self.describe_geom.Arguments = dict(
-                CappingRequired="No",
-                SetupType="The geometry consists of only fluid regions with no voids",
-                InvokeShareTopology="Yes"
-            )
-            self.workflow.TaskObject["Describe Geometry"].Execute()
+            self.describe_geom.setup_type = "The geometry consists of only fluid regions with no voids"
+            self.describe_geom.capping_required = "No"
+            self.describe_geom.wall_to_internal.default_value()
+            self.describe_geom.invoke_share_topology = "Yes"
+            self.describe_geom.multizone.default_value()
+            self.describe_geom()
+            
+            
 
-    def share_topology(self):
+    def invoke_share_topology(self):
         """
         _datamodel.ShareTopology()
              self.s_topology.Arguments = dict(
@@ -179,22 +178,32 @@ class Mesh:
             "ShareTopologyPreferences":,#dict[str, Any]
             "SMImprovePreferences":,#dict[str, Any]
             "SurfaceMeshPreferences":,#dict[str, Any]
-        )
-        """
-        self.s_topology = self.workflow.TaskObject["Apply Share Topology"]
-        self.gap_distance = self.s_topology.Arguments().default_value("GapDistance")*0.1
+    """
+        self.share_topology = self.workflow.apply_share_topology
+        self.share_topology.gap_distance.default_value()
 
-        self.s_topology.Arguments.updateDict({ "GapDistance":self.gap_distance})
+        sim_params = self.share_topology.get_state() #get default values from here then adjust according to 
+        self.share_topology()
 
-        self.s_topology.Execute()
-   
-            
-    def create_and_update_regions(self):
-            self.workflow.TaskObject["Create Regions"].updateDict({"NumberOfFlowVolumes":2}).Execute()
-            self.update_regions = self.workflow.TaskObject["Update Boundaries"]
 
-            self.update_regions.Arguments()
+    def update_regions(self):
+        self.update_regions = self.workflow.update_regions
+        self.update_regions()
+        self.update_regions.revert()
 
+        region_list = self.update_regions.region_current_list()
+        region_types = self.update_regions.region_current_type_list()
+
+        #iterate through and weed out non-fluid regions. should only be two fluid regions 
+        
+    def update_boundaries(self):
+            self.update_boundaries = self.workflow.update_boundaries
+
+            self.update_boundaries()
+            self.update_boundaries.revert()
+
+            boundary_list = self.update_boundaries.boundary_current_list()
+            boundary_type = self.update_boundaries.boundary_current_type_list()
             """
             _datamodel.UpdateRegions()
             """
@@ -231,6 +240,17 @@ class Mesh:
         self.session = self.session.switch_to_solver()
 
     def run_meshing(self):
+        self.initialise()
+        self.import_geom()
+        self.add_local_sizings()
+        self.create_surface_mesh()
+        self.describe_geom()
+        self.invoke_share_topology()
+        self.create_and_update_regions()
+        self.add_BL()
+        self.generate_volume_mesh()
+        self.save_mesh()
+        self.session.exit()
         try:
             self.initialise()
             self.import_geom()
