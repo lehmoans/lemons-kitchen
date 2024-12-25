@@ -1,0 +1,3 @@
+cmake/build pip isntall error?
+    py -m pip install {package}
+
