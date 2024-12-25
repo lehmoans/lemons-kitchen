@@ -188,42 +188,42 @@ class Mesh:
 
 
     def update_boundaries_and_regions(self):
-            #update boundaries
-            """
-            allowed boundary types: 
-                velocity-inlet, pressure-outlet, pressure-inlet, pressure-far-field, mass-flow-inlet, mass-flow-outlet, 
-                outflow, symmetry, wall, internal, interface, overset, outlet-vent, intake-fan, inlet-vent, exhaust-fan, 
-                porous-jump, fan, radiator, multiple-types
-            """
-            self.update_boundaries = self.workflow.update_boundaries
+        #update boundaries
+        """
+        allowed boundary types: 
+            velocity-inlet, pressure-outlet, pressure-inlet, pressure-far-field, mass-flow-inlet, mass-flow-outlet, 
+            outflow, symmetry, wall, internal, interface, overset, outlet-vent, intake-fan, inlet-vent, exhaust-fan, 
+            porous-jump, fan, radiator, multiple-types
+        """
+        self.update_boundaries = self.workflow.update_boundaries
 
-            self.update_boundaries()
-            self.update_boundaries.revert()
+        self.update_boundaries()
+        self.update_boundaries.revert()
 
-            boundaries_args = self.update_boundaries.arguments()
+        boundaries_args = self.update_boundaries.arguments()
 
-            boundary_list = self.update_boundaries.boundary_current_list()
-            boundary_types = self.update_boundaries.boundary_current_type_list()
+        boundary_list = self.update_boundaries.boundary_current_list()
+        boundary_types = self.update_boundaries.boundary_current_type_list()
 
-            new_boundary_types = boundary_types
+        new_boundary_types = boundary_types
 
-            for i, (name, _) in enumerate(zip(boundary_list, boundary_types)):
-                if name == "inlet":
-                    new_boundary_types[i] ='pressure-inlet'
-                else if name == 'outlet':
-                    new_boundary_types[i] ='mass-flow-outlet'
-            
-            boundary_list = [i for i in boundary_list]
-            boundary_types = [i for i in boundary_types]
-            new_boundary_types = [i for i in new_boundary_list]
+        for i, (name, _) in enumerate(zip(boundary_list, boundary_types)):
+            if name == "inlet":
+                new_boundary_types[i] ='pressure-inlet'
+            elif name == 'outlet':
+                new_boundary_types[i] ='mass-flow-outlet'
+        
+        boundary_list = [i for i in boundary_list]
+        boundary_types = [i for i in boundary_types]
+        new_boundary_types = [i for i in new_boundary_types]
 
-            self.update_boundaries.
+        #self.update_boundaries.
 
 
 
-            """
-            _datamodel.UpdateRegions()
-            """
+        """
+        _datamodel.UpdateRegions()
+        """
 
         self.update_regions = self.workflow.update_regions
         self.update_regions()
@@ -237,6 +237,7 @@ class Mesh:
         #iterate through and weed out non-fluid regions. should only be two fluid regions 
         
     def update_boundaries(self):
+        pass
            
     def add_BL(self):
         # Add Boundary Layers
@@ -306,7 +307,7 @@ if __name__ =="__main__":
     #set the "ANSYS_FLUENT_PATH" environment variable in computer, might have to set it to .profile in uni computer:  echo 'export "ANSYS_FLUENT_PATH"="D://ANSYS_V241/'Ansys Inc'/v241"' >>~/.profile
     #or set the inputs for pyfluent(fluent_path = "")
 
-    #os.environ["ANSYS_FLUENT_PATH"] = "D://ANSYS_V241/'Ansys Inc'/v241/fluent"
+    os.environ["ANSYS_FLUENT_PATH"] = "C:/'Program Files'/'ANSYS Inc'/v241/fluent"
     
     #cleanup exiting fluent threads
     cleanup_fluent()
