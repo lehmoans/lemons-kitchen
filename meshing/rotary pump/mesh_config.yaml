@@ -1,0 +1,64 @@
+precision: double
+processors: 10
+show_gui: True
+
+geometry:
+  name: C:\Users\Owner\CFDAnalysis\CFDTools\Resources\Geometries\airbrakes_geometry.scdoc
+  type: scdoc
+
+scoped:
+  - name: rocket_near_boi
+    type: boi
+    max: 400
+    growth: 1.2
+    zone:
+      - rocket_near_boi:rocket_near_boi-enclosure
+  - name: fin_far_boi
+    type: boi
+    max: 100
+    growth: 1.2
+    zone:
+      - fins_far_boi:fins_far_boi-enclosure
+  - name: nosecone_far_boi
+    type: boi
+    max: 100
+    growth: 1.2
+    zone:
+      - nose_far_boi:nose_far_boi-enclosure
+  - name: flap_far_boi
+    type: boi
+    max: 100
+    growth: 1.2
+    zone:
+      - flaps_far_boi:flaps_far_boi-enclosure
+  - name: rocket_curve
+    type: curve
+    max: 16
+    growth: 1.2
+    curve: 10
+    zone:
+      - rocket_body
+      - rocket_fins
+      - rocket_flaps
+  - name: rocket_prox
+    type: proximity
+    max: 8
+    growth: 1.2
+    cells: 8
+    zone:
+      - rocket_body
+      - rocket_fins
+      - rocket_flaps
+
+size_field:
+  name: example_size_field
+
+mesh:
+  name: mesh_airbrakes
+  initial_layer: 0.5
+  layers: 15
+  growth: 1.08
+  zone:
+    - rocket_body
+    - rocket_fins
+    - rocket_flaps

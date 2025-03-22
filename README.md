@@ -8,3 +8,9 @@ Uses geometry (.scodc) files.
 Solution
 will use SST- kw method
 
+
+NOTES:
+Code ONLY works on windows:
+    - powershell: git clone repo
+        - may have to specify the fluent installation location
+

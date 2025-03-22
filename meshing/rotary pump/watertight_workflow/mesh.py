@@ -21,7 +21,7 @@ for meshing refer:
 
 class Mesh:
 
-    def __init__(self,verbose=False,show_gui =False):
+    def __init__(self,verbose=False,show_gui =True):
         self.save_dir  = SAVE_DIR
         self.scdoc_file_path= GEOM_FILE_PATH
         self.file_name_noext = os.path.basename(self.scdoc_file_path)
@@ -33,42 +33,13 @@ class Mesh:
         self.updates = Updates(self.verbose)
         self.show_gui = show_gui
         self.uuid=  uuid.uuid4()
-        self.cleanup()
-
-    def __exit__(self):
-        pass
-        self.cleanup()
-
-    def cleanup(self):
-        """
-        cancels all threads/session when script is exited
-        """
-
-        #if self.session and self.session.
-        try:
-            if self.session:
-                self.session.exit()
-        except:
-            print("no sessions to exit")
-
 
     @staticmethod
     def get_cores():
         return psutil.cpu_count(logical=False)
-    
-    def append_default_values(self, taskObject,variables:dict, write_txt = True):
-        default_val_appended_dict = {}
-        for key, value in variables.items():
-            default_val = taskObject.Arguments.default_value(key)
-            default_val_appended_dict[f"key"] = {"value": value, "default":default_val}
-
-        if write_txt:
-           file_path = f"default_values_appended_{self.uuid[-4:]}.txt"
-           
-           with open(file_path,"a") as file:
-               file.write(default_val_appended_dict)
-               file.close()
-
+    def load_workflow(self, step = None):
+        pass
+        
         
     def initialise(self):
         #fluent setup
@@ -76,12 +47,13 @@ class Mesh:
             mode="meshing",
             precision=pyfluent.Precision.DOUBLE,
             processor_count=self.processors,
-            cleanup_on_exit=True,
+            cleanup_on_exit=False,
             ui_mode="gui" if self.show_gui else None,
             py=True
-    )   
+        )   
         self.workflow = self.session.watertight()
         print("workflow initiated")
+        return True
 
     def import_geom(self):
         self.import_geom = self.workflow.import_geometry
@@ -148,6 +120,7 @@ class Mesh:
 
 
         self.generate_surface_mesh()
+        return True
 
    
     def describe_geom(self):
@@ -164,6 +137,7 @@ class Mesh:
             self.describe_geom.multizone = "No"
 
             self.describe_geom()
+            return True
             
             
 
@@ -180,11 +154,15 @@ class Mesh:
             "SMImprovePreferences":,#dict[str, Any]
             "SurfaceMeshPreferences":,#dict[str, Any]
     """
+        if not self.describe_geom.invoke_share_topology:
+            return False
+        
         self.share_topology = self.workflow.apply_share_topology
         self.share_topology.gap_distance.default_value()
 
         sim_params = self.share_topology.get_state() #get default values from here then adjust according to 
         self.share_topology()
+        return True
 
 
     def update_boundaries_and_regions(self):
@@ -217,9 +195,7 @@ class Mesh:
         boundary_types = [i for i in boundary_types]
         new_boundary_types = [i for i in new_boundary_types]
 
-        #self.update_boundaries.
-
-
+        #self.update_boundaries
 
         """
         _datamodel.UpdateRegions()
@@ -276,29 +252,13 @@ class Mesh:
         self.add_local_sizings()
         self.create_surface_mesh()
         self.describe_geom()
-        #self.invoke_share_topology()
+        self.invoke_share_topology()
         self.update_regions()
         self.update_boundaries()
         self.add_BL()
         self.generate_volume_mesh()
         self.save_mesh()
-        self.session.exit()
-        try:
-            self.initialise()
-            self.import_geom()
-            self.add_local_sizings()
-            self.create_surface_mesh()
-            self.describe_geom()
-            self.share_topology()
-            self.create_and_update_regions()
-            self.add_BL()
-            self.generate_volume_mesh()
-            self.save_mesh()
-            self.session.exit()
-        except:
-            self.updates.send_update("meshing","meshing error")
-        else:
-             self.updates.send_update("meshing","meshing successful")            
+        self.session.exit()      
 
 
 if __name__ =="__main__":
@@ -307,7 +267,7 @@ if __name__ =="__main__":
     #set the "ANSYS_FLUENT_PATH" environment variable in computer, might have to set it to .profile in uni computer:  echo 'export "ANSYS_FLUENT_PATH"="D://ANSYS_V241/'Ansys Inc'/v241"' >>~/.profile
     #or set the inputs for pyfluent(fluent_path = "")
 
-    os.environ["ANSYS_FLUENT_PATH"] = "C:/'Program Files'/'ANSYS Inc'/v241/fluent"
+    os.environ["ANSYS_FLUENT_PATH"] = "D:/'ANSYS Inc'/v241/fluent"
     
     #cleanup exiting fluent threads
     cleanup_fluent()
